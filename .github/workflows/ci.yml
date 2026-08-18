@@ -27,7 +27,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['18', '20', '22']
+        # vitest 4 pulls in `rolldown`, which imports `styleText` from
+        # node:util at load time — an API only present from Node 20.12
+        # onward, so Node 18 can't even boot the test runner. That's a test
+        # *tooling* floor, not the built package's — package.json's
+        # `engines` still claims >=18, verified separately below by the
+        # node18-smoke job, which runs the built dist/ with plain `node`.
+        node: ['20', '22']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,6 +48,24 @@ jobs:
         run: |
           npm run build
           npm publish --dry-run
+
+  typescript-node18-smoke:
+    name: typescript / node 18 smoke test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Run the built dist/ with plain node (no vitest/rolldown involved)
+        run: npm run smoke
 
   typescript-integration:
     name: typescript / integration

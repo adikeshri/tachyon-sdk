@@ -164,6 +164,13 @@ npm run typecheck
 npm run build
 ```
 
+`npm test` (vitest) needs Node 20.12+ itself — a transitive dependency
+(`rolldown`, pulled in by vitest) won't load on Node 18. The package's own
+`engines` still claims Node 18+, since the built `dist/` output only needs
+`fetch`/`URL`/`AbortController`; that claim is verified by
+`npm run build && npm run smoke`, a small no-vitest script CI runs on an
+actual Node 18.
+
 ### Integration tests
 
 `npm test` only runs the mocked unit suite. A second suite in
