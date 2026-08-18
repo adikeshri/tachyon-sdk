@@ -1,0 +1,52 @@
+{
+  "name": "tachyon-sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript/JavaScript client for Tachyon, the typo-tolerant full-text search engine.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Tachyon contributors",
+  "homepage": "https://github.com/adikeshri/tachyon-sdk/tree/main/typescript",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adikeshri/tachyon-sdk.git",
+    "directory": "typescript"
+  },
+  "keywords": [
+    "tachyon",
+    "search",
+    "full-text-search",
+    "typo-tolerance",
+    "bm25"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build && npm run test"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.11"
+  }
+}
