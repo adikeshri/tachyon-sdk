@@ -1,0 +1,144 @@
+name: Release TypeScript SDK
+
+# Real releases are tag-triggered: pushing `typescript-vX.Y.Z` builds, tests,
+# and publishes that exact version to npm, then cuts a GitHub release.
+#
+# `workflow_dispatch` exists to run the whole pipeline (build + unit +
+# integration tests, and optionally a `npm publish --dry-run`) against any
+# branch without publishing anything — useful for validating a change to
+# this workflow itself, or the package right before tagging it.
+on:
+  push:
+    tags:
+      - 'typescript-v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Run the full pipeline but skip the actual npm publish / GitHub release
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: typescript
+
+jobs:
+  build-and-test:
+    name: build & test
+    runs-on: ubuntu-latest
+    services:
+      tachyon:
+        image: adikeshri/tachyon
+        ports:
+          - 8108:8108
+        env:
+          TACHYON_ADMIN_KEY: admin-key
+          TACHYON_SEARCH_KEY: search-key
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Wait for Tachyon to report healthy
+        run: |
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:8108/health && exit 0
+            sleep 1
+          done
+          echo "Tachyon never became healthy" >&2
+          exit 1
+      - run: npm run test:integration
+        env:
+          TACHYON_URL: http://localhost:8108
+          TACHYON_ADMIN_KEY: admin-key
+          TACHYON_SEARCH_KEY: search-key
+
+      - name: Determine version and verify it matches the tag
+        id: version
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#typescript-v}"
+            if [[ "$TAG_VERSION" != "$PKG_VERSION" ]]; then
+              echo "::error::Tag typescript-v$TAG_VERSION does not match package.json version $PKG_VERSION. Bump package.json and retag."
+              exit 1
+            fi
+          fi
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - run: npm run build
+
+      - name: Pack the exact tarball that will be published
+        run: npm pack
+
+      - name: Sanity-check the pack (dry-run publish)
+        run: npm publish --dry-run --access public ./*.tgz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: typescript/*.tgz
+          retention-days: 14
+
+  publish:
+    name: publish
+    needs: build-and-test
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # npm provenance / trusted publishing
+    defaults:
+      run:
+        shell: bash
+        working-directory: '.'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full tag history, for release-notes range detection
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: typescript-package
+
+      - name: Publish to npm
+        working-directory: typescript-package
+        run: npm publish --access public --provenance ./*.tgz
+        env:
+          # Leave NPM_TOKEN unset (repo secret absent) to use npm's OIDC
+          # trusted-publishing flow instead, if the package is configured
+          # for it on npmjs.com. See RELEASING.md.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build-and-test.outputs.version }}
+        run: |
+          TAG="typescript-v${VERSION}"
+          PREV_TAG=$(git tag --list 'typescript-v*' --sort=-v:refname | grep -vFx "$TAG" | head -n1 || true)
+          NOTES_ARGS=(--generate-notes)
+          if [[ -n "$PREV_TAG" ]]; then
+            NOTES_ARGS+=(--notes-start-tag "$PREV_TAG")
+          fi
+          gh release create "$TAG" typescript-package/*.tgz \
+            --title "tachyon-sdk (TypeScript) v${VERSION}" \
+            "${NOTES_ARGS[@]}"

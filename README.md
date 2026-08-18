@@ -82,7 +82,9 @@ python/       PyPI package "tachyon-sdk" (import tachyon_sdk)
 ```
 
 Each is independently versioned, tested, and published; see the README in
-each directory for development setup.
+each directory for development setup, and [`RELEASING.md`](RELEASING.md)
+for how a release actually ships (tag-triggered CI, built once and
+promoted, gated by environment approval before it hits npm/PyPI).
 
 ## Contributing
 

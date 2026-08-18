@@ -8,7 +8,7 @@
   "homepage": "https://github.com/adikeshri/tachyon-sdk/tree/main/typescript",
   "repository": {
     "type": "git",
-    "url": "https://github.com/adikeshri/tachyon-sdk.git",
+    "url": "git+https://github.com/adikeshri/tachyon-sdk.git",
     "directory": "typescript"
   },
   "keywords": [
