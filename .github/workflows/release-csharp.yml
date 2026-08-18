@@ -3,6 +3,12 @@ name: Release C# SDK
 # Real releases are tag-triggered: pushing `csharp-vX.Y.Z` builds, tests,
 # and publishes that exact version to NuGet, then cuts a GitHub release.
 #
+# Publishing uses NuGet Trusted Publishing (OIDC) rather than a long-lived
+# API key: the `publish` job exchanges its GitHub Actions identity token for
+# a 1-hour NuGet API key via the NuGet/login action, scoped to whatever
+# trust policy is configured on nuget.org for this repo/workflow/environment
+# — see RELEASING.md for that one-time setup.
+#
 # `workflow_dispatch` exists to run the whole pipeline (build + unit +
 # integration tests, and a `dotnet pack`) against any branch without
 # publishing anything — useful for validating a change to this workflow
@@ -91,6 +97,7 @@ jobs:
     environment: nuget-release
     permissions:
       contents: write # create the GitHub release
+      id-token: write # exchanged for a short-lived NuGet API key — no long-lived secret needed
     defaults:
       run:
         shell: bash
@@ -105,10 +112,16 @@ jobs:
           name: nuget-package
           path: nupkg
 
+      - name: NuGet login (Trusted Publishing — OIDC token exchanged for a 1-hour API key)
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Publish to NuGet
         run: dotnet nuget push nupkg/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
 
       - name: Create GitHub release
         env:

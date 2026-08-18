@@ -123,12 +123,28 @@ token, then switch to trusted publishing for subsequent ones if desired.
 
 ### NuGet
 
-NuGet doesn't support OIDC trusted publishing — an API key is the only
-option. Generate one at nuget.org → account → API Keys, scoped to the
-`Tachyon.Sdk` package (or "glob pattern" `Tachyon.Sdk*` if the package
-doesn't exist yet, since you can't scope a key to a package that isn't
-published). Set it as the `NUGET_API_KEY` secret on the `nuget-release`
-environment.
+Uses [NuGet Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing)
+(OIDC) — no long-lived API key stored anywhere. `release-csharp.yml`'s
+`publish` job exchanges its GitHub Actions identity token for a NuGet API
+key that's valid for exactly one hour, via the `NuGet/login` action, right
+before pushing.
+
+One-time setup on nuget.org:
+
+1. Sign in → your username → **Trusted Publishing** → add a new policy
+2. **Repository Owner**: `adikeshri`, **Repository**: `tachyon-sdk`,
+   **Workflow File**: `release-csharp.yml` (just the filename, not the
+   `.github/workflows/` path), **Environment**: `nuget-release` (must match
+   this repo's `environment: nuget-release` exactly, or the token exchange
+   is rejected)
+3. If `Tachyon.Sdk` isn't published yet, the policy starts in a 7-day
+   provisional state (nuget.org can't lock it to a specific repo ID until a
+   real publish happens) — the first tagged release needs to land inside
+   that window, or you restart the timer from the same policy page.
+
+Then set one secret, `NUGET_USER`, on the `nuget-release` environment —
+your nuget.org **profile name** (not email, not a key) — the `NuGet/login`
+step passes it as the identity being authenticated as.
 
 ### Maven Central
 
