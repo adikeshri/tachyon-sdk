@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <PackageId>Tachyon.Sdk</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Tachyon contributors</Authors>
+    <Description>Official .NET client for Tachyon, the typo-tolerant full-text search engine.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/adikeshri/tachyon-sdk/tree/main/csharp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/adikeshri/tachyon-sdk.git</RepositoryUrl>
+    <PackageTags>tachyon;search;full-text-search;typo-tolerance;bm25</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>
