@@ -1,0 +1,129 @@
+name: Release Go SDK
+
+# Go modules have no publish step: the git tag *is* the release. The moment
+# `go/vX.Y.Z` is pushed, anyone can `go get` it — the Go module proxy
+# (proxy.golang.org) fetches directly from this repo on first request, with
+# no action from us required and no way to gate or undo it after the fact.
+# So unlike the other release workflows here, there is no environment
+# approval step: by the time this workflow even starts, the release has
+# already happened. What this workflow does is verify that release was
+# sound (full test suite against the exact tagged commit), warm the module
+# proxy cache so the first real `go get` isn't the one paying to fetch it,
+# and cut a GitHub release with notes.
+#
+# The practical gate is upstream of this file: only tag a commit where CI
+# already passed on main.
+#
+# Note the tag format: `go/vX.Y.Z`, not `go-vX.Y.Z` like the other SDKs.
+# This one isn't a style choice — it's a hard requirement for Go modules
+# that live in a repo subdirectory (see
+# https://go.dev/ref/mod#vcs-version), since the module path is
+# github.com/adikeshri/tachyon-sdk/go.
+#
+# workflow_dispatch here only ever runs build-and-test — there's no tag on a
+# manual run, so there's no version to release; it exists purely to let you
+# run the full test suite against any branch on demand.
+on:
+  push:
+    tags:
+      - 'go/v*.*.*'
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    shell: bash
+    working-directory: go
+
+jobs:
+  build-and-test:
+    name: build & test
+    runs-on: ubuntu-latest
+    services:
+      tachyon:
+        image: adikeshri/tachyon
+        ports:
+          - 8108:8108
+        env:
+          TACHYON_ADMIN_KEY: admin-key
+          TACHYON_SEARCH_KEY: search-key
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Check gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "::error::gofmt would reformat these files:"
+            echo "$out"
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go vet -tags=integration ./...
+      - run: go build ./...
+      - run: go test ./...
+
+      - name: Wait for Tachyon to report healthy
+        run: |
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:8108/health && exit 0
+            sleep 1
+          done
+          echo "Tachyon never became healthy" >&2
+          exit 1
+      - run: go test -tags=integration ./integration/...
+        env:
+          TACHYON_URL: http://localhost:8108
+          TACHYON_ADMIN_KEY: admin-key
+          TACHYON_SEARCH_KEY: search-key
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "version=${GITHUB_REF_NAME#go/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=(workflow_dispatch, no tag)" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    name: publish
+    needs: build-and-test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release
+    defaults:
+      run:
+        shell: bash
+        working-directory: '.'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full tag history, for release-notes range detection
+
+      - name: Warm the Go module proxy cache
+        run: |
+          curl -sf "https://proxy.golang.org/github.com/adikeshri/tachyon-sdk/go/@v/${{ needs.build-and-test.outputs.version }}.info" \
+            || echo "::warning::Proxy warm-up request failed; go get will still work, just slower on the very first fetch."
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build-and-test.outputs.version }}
+        run: |
+          TAG="go/${VERSION}"
+          PREV_TAG=$(git tag --list 'go/v*' --sort=-v:refname | grep -vFx "$TAG" | head -n1 || true)
+          NOTES_ARGS=(--generate-notes)
+          if [[ -n "$PREV_TAG" ]]; then
+            NOTES_ARGS+=(--notes-start-tag "$PREV_TAG")
+          fi
+          gh release create "$TAG" \
+            --title "tachyon-sdk (Go) ${VERSION}" \
+            "${NOTES_ARGS[@]}"

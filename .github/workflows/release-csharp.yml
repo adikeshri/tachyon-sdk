@@ -1,0 +1,126 @@
+name: Release C# SDK
+
+# Real releases are tag-triggered: pushing `csharp-vX.Y.Z` builds, tests,
+# and publishes that exact version to NuGet, then cuts a GitHub release.
+#
+# `workflow_dispatch` exists to run the whole pipeline (build + unit +
+# integration tests, and a `dotnet pack`) against any branch without
+# publishing anything — useful for validating a change to this workflow
+# itself, or the package right before tagging it.
+on:
+  push:
+    tags:
+      - 'csharp-v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Run the full pipeline but skip the actual NuGet publish / GitHub release
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: csharp
+
+jobs:
+  build-and-test:
+    name: build & test
+    runs-on: ubuntu-latest
+    services:
+      tachyon:
+        image: adikeshri/tachyon
+        ports:
+          - 8108:8108
+        env:
+          TACHYON_ADMIN_KEY: admin-key
+          TACHYON_SEARCH_KEY: search-key
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - run: dotnet build Tachyon.Sdk.sln
+      - run: dotnet test Tachyon.Sdk.sln
+
+      - name: Wait for Tachyon to report healthy
+        run: |
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:8108/health && exit 0
+            sleep 1
+          done
+          echo "Tachyon never became healthy" >&2
+          exit 1
+      - run: dotnet test Tachyon.Sdk.IntegrationTests/Tachyon.Sdk.IntegrationTests.csproj
+        env:
+          TACHYON_URL: http://localhost:8108
+          TACHYON_ADMIN_KEY: admin-key
+          TACHYON_SEARCH_KEY: search-key
+
+      - name: Determine version and verify it matches the tag
+        id: version
+        run: |
+          PKG_VERSION=$(dotnet msbuild Tachyon.Sdk/Tachyon.Sdk.csproj -getProperty:Version)
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#csharp-v}"
+            if [[ "$TAG_VERSION" != "$PKG_VERSION" ]]; then
+              echo "::error::Tag csharp-v$TAG_VERSION does not match Tachyon.Sdk.csproj Version $PKG_VERSION. Bump the csproj and retag."
+              exit 1
+            fi
+          fi
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Pack the exact package that will be published
+        run: dotnet pack Tachyon.Sdk/Tachyon.Sdk.csproj -c Release -o nupkg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: csharp/nupkg/*.nupkg
+          retention-days: 14
+
+  publish:
+    name: publish
+    needs: build-and-test
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+    runs-on: ubuntu-latest
+    environment: nuget-release
+    permissions:
+      contents: write # create the GitHub release
+    defaults:
+      run:
+        shell: bash
+        working-directory: '.'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full tag history, for release-notes range detection
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget-package
+          path: nupkg
+
+      - name: Publish to NuGet
+        run: dotnet nuget push nupkg/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build-and-test.outputs.version }}
+        run: |
+          TAG="csharp-v${VERSION}"
+          PREV_TAG=$(git tag --list 'csharp-v*' --sort=-v:refname | grep -vFx "$TAG" | head -n1 || true)
+          NOTES_ARGS=(--generate-notes)
+          if [[ -n "$PREV_TAG" ]]; then
+            NOTES_ARGS+=(--notes-start-tag "$PREV_TAG")
+          fi
+          gh release create "$TAG" nupkg/*.nupkg \
+            --title "tachyon-sdk (C#) v${VERSION}" \
+            "${NOTES_ARGS[@]}"
