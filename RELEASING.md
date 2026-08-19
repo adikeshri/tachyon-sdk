@@ -8,7 +8,7 @@ GitHub Actions workflow, triggered by its own tag prefix:
 | TypeScript | `typescript-vX.Y.Z` | [`release-typescript.yml`](.github/workflows/release-typescript.yml) | [npm](https://www.npmjs.com/package/tachyon-sdk) |
 | Python | `python-vX.Y.Z` | [`release-python.yml`](.github/workflows/release-python.yml) | [PyPI](https://pypi.org/project/tachyon-sdk/) |
 | Go | `go/vX.Y.Z` (slash, not hyphen — see below) | [`release-go.yml`](.github/workflows/release-go.yml) | nowhere — the git tag *is* the release |
-| C# | `csharp-vX.Y.Z` | [`release-csharp.yml`](.github/workflows/release-csharp.yml) | [NuGet](https://www.nuget.org/packages/Tachyon.Sdk) |
+| C# | `csharp-vX.Y.Z` | [`release-csharp.yml`](.github/workflows/release-csharp.yml) | [NuGet](https://www.nuget.org/packages/TachyonSdk) |
 | Java | `java-vX.Y.Z` | [`release-java.yml`](.github/workflows/release-java.yml) | [Maven Central](https://central.sonatype.com/artifact/io.github.adikeshri/tachyon-sdk) |
 
 The TypeScript, Python, and C# workflows all follow the same shape: build
@@ -137,7 +137,7 @@ One-time setup on nuget.org:
    `.github/workflows/` path), **Environment**: `nuget-release` (must match
    this repo's `environment: nuget-release` exactly, or the token exchange
    is rejected)
-3. If `Tachyon.Sdk` isn't published yet, the policy starts in a 7-day
+3. If `TachyonSdk` isn't published yet, the policy starts in a 7-day
    provisional state (nuget.org can't lock it to a specific repo ID until a
    real publish happens) — the first tagged release needs to land inside
    that window, or you restart the timer from the same policy page.

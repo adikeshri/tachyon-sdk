@@ -19,7 +19,7 @@ built on.
 | [**TypeScript / JavaScript**](typescript) | `npm install tachyon-sdk` — Node 18+, ESM |
 | [**Python**](python) | `pip install tachyon-sdk` — Python 3.8+ |
 | [**Go**](go) | `go get github.com/adikeshri/tachyon-sdk/go` — Go 1.21+ |
-| [**C# / .NET**](csharp) | `dotnet add package Tachyon.Sdk` — .NET 8+ |
+| [**C# / .NET**](csharp) | `dotnet add package TachyonSdk` — .NET 8+ |
 | [**Java**](java) | `io.github.adikeshri:tachyon-sdk` (Maven) — Java 17+ |
 
 ## Quickstart
@@ -129,7 +129,7 @@ for how to run it locally.
 typescript/   npm package "tachyon-sdk"
 python/       PyPI package "tachyon-sdk" (import tachyon_sdk)
 go/           Go module "github.com/adikeshri/tachyon-sdk/go" (import as tachyon)
-csharp/       NuGet package "Tachyon.Sdk"
+csharp/       NuGet package "TachyonSdk" (namespace Tachyon.Sdk)
 java/         Maven artifact "io.github.adikeshri:tachyon-sdk"
 ```
 

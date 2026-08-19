@@ -4,7 +4,7 @@ Official .NET client for [Tachyon](https://github.com/adikeshri/tachyon), the
 typo-tolerant full-text search engine.
 
 ```bash
-dotnet add package Tachyon.Sdk
+dotnet add package TachyonSdk
 ```
 
 Targets .NET 8 (LTS). Zero third-party dependencies — just
